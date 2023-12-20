@@ -5,7 +5,7 @@ Ensure you have the following installed and configured:
 - `make`
 - `kubectl` (connected to a Kubernetes cluster (1.27+) with admin rights and access to docker.io)
 
-The controller image which will be deployed is pushed to [Dockerhub](https://hub.docker.com/r/cranberrycheese/a8s-dummy-controller/tags)
+The controller image which will be deployed is pushed to [Dockerhub](https://hub.docker.com/r/cranberrycheese/a8s-homework/tags)
 
 ### Steps to Test the homework
 
