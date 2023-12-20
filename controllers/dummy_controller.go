@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -25,8 +26,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
 	homeworkv1alpha1 "github.com/cranberrycheese/a8s-homework/api/v1alpha1"
 )
@@ -40,13 +44,13 @@ type DummyReconciler struct {
 //+kubebuilder:rbac:groups=homework.interview.com,resources=dummies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=homework.interview.com,resources=dummies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=homework.interview.com,resources=dummies/finalizers,verbs=update
-//+kubebuilder:rbac:groups="",resources=pods,verbs=get;create
+//+kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create
 
 // Reconcile is called when there are changes to a Dummy resource or the pod associated with it.
 // It does the following:
 // - Log the Dummy resource's name, namespace, and message
 // - Sets the SpecEcho status to the message
-// - Creates an nginx pod associated with the Dummy resource
+// - Creates an nginx pod associated with the Dummy resource if it doesn't exist
 // - Writes the nginx pod's Phase to the Dummy's PodStatus status
 func (r *DummyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -58,12 +62,23 @@ func (r *DummyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			// Was deleted
 			return ctrl.Result{}, nil
 		} else {
+			logger.Error(err, "Failed to get Dummy resource")
 			return ctrl.Result{}, err
 		}
 	}
 
 	// Log Dummy info
-	logger.Info("Name", dummy.Name, "Namespace", dummy.Namespace, "Message", dummy.Spec.Message)
+	fmt.Printf("a8s-homework Dummy Name: %s, Namespace: %s, Message: %s\n", dummy.Name, dummy.Namespace, dummy.Spec.Message)
+
+	// Update the SpecEcho status if necessary
+	if dummy.Status.SpecEcho != dummy.Spec.Message {
+		dummy.Status.SpecEcho = dummy.Spec.Message
+		err := r.Status().Update(ctx, dummy)
+		if err != nil {
+			logger.Error(err, "Failed to update SpecEcho status")
+			return ctrl.Result{}, err
+		}
+	}
 
 	// Manage Dummy pod
 	pod := &corev1.Pod{}
@@ -71,40 +86,33 @@ func (r *DummyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// Pod doesn't exist, create it
-			pod = nil
+			pod = newDummyPod(dummy)
 
-			// Set the Dummy resource as owner of the pod.
-			// This will cause updates to the Pod to trigger this reconcile function,
-			// and Pod deletion when the Dummy is deleted.
 			err := ctrl.SetControllerReference(dummy, pod, r.Scheme)
 			if err != nil {
+				logger.Error(err, "Failed set controller reference")
 				return ctrl.Result{}, err
 			}
 
 			err = r.Create(ctx, pod)
 			if err != nil {
+				logger.Error(err, "Failed to create Pod")
 				return ctrl.Result{}, err
 			}
+
+			// Return early to avoid concurrent status update errors
+			return ctrl.Result{}, nil
 		} else {
 			return ctrl.Result{}, err
 		}
 	}
 
-	// Update the Status
-	var statusChanged bool = false
-	if dummy.Status.SpecEcho != dummy.Spec.Message {
-		dummy.Status.SpecEcho = dummy.Spec.Message
-		statusChanged = true
-	}
-
+	// Update Dummy PodStatus
 	if dummy.Status.PodStatus != pod.Status.Phase {
 		dummy.Status.PodStatus = pod.Status.Phase
-		statusChanged = true
-	}
-
-	if statusChanged {
 		err := r.Status().Update(ctx, dummy)
 		if err != nil {
+			logger.Error(err, "Failed to update Dummy status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -114,8 +122,33 @@ func (r *DummyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *DummyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	dummyFilterPredicate := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			// Don't trigger reconcile if only the Dummy status has changed
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration()
+		},
+		DeleteFunc: func(e event.DeleteEvent) bool {
+			// Don't trigger reconcile if the Dummy has been confirmed deleted.
+			return !e.DeleteStateUnknown
+		},
+	}
+
+	podFilterPredicate := predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			// Only trigger reconcile if the Pod's phase has changed
+			oldPod, ok1 := e.ObjectOld.(*corev1.Pod)
+			newPod, ok2 := e.ObjectNew.(*corev1.Pod)
+			if !ok1 || !ok2 {
+				return false
+			}
+
+			return oldPod.Status.Phase != newPod.Status.Phase
+		},
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&homeworkv1alpha1.Dummy{}).
+		For(&homeworkv1alpha1.Dummy{}, builder.WithPredicates(dummyFilterPredicate)).
+		Owns(&corev1.Pod{}, builder.WithPredicates(podFilterPredicate)).
 		Complete(r)
 }
 
