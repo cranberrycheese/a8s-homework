@@ -1,8 +1,66 @@
-# a8s-dummy-controller
-// TODO(user): Add simple overview of use/purpose
+## Testing the a8s homework
 
-## Description
-// TODO(user): An in-depth paragraph about your project and overview of use
+### Prerequisites
+Ensure you have the following installed and configured:
+- `make`
+- `kubectl` (connected to a Kubernetes cluster (1.27+) with admin rights and access to docker.io)
+
+The controller image which will be deployed is pushed to [Dockerhub](https://hub.docker.com/r/cranberrycheese/a8s-dummy-controller/tags)
+
+### Steps to Test the homework
+
+1. **Install the CRDs:**
+    ```bash
+    make install
+    ```
+
+2. **Deploy the controller:**
+    ```bash
+    make deploy
+    ```
+
+3. **Check if the Operator is running**
+    ```bash
+    kubectl get pod -n a8s-dummy-controller-system
+    ```
+
+4. **Apply a Dummy Custom Resource:**
+    ```bash
+    kubectl apply -f config/samples/homework_v1alpha1_dummy.yaml
+    ```
+
+5. **Check Operator Logs:**
+   Verify that the operator logged the Dummy CR's name, namespace, and message field:
+    ```bash
+    kubectl logs -n a8s-dummy-controller-system $(kubectl get pod -n a8s-dummy-controller-system -o jsonpath="{.items[0].metadata.name}")
+    ```
+
+6. **Inspect the Dummy CR:**
+    Check that the Dummy CR contains the desired fields:
+    ```bash
+    kubectl describe dummies/dummy-sample
+    ```
+
+7. **Verify Nginx Pod Creation:**
+   ```bash
+   kubectl get pod
+   ```
+
+8. **Test CR Deletion and Pod Removal:**
+    Delete the CR and verify that the associated pod is also removed:
+    ```bash
+    kubectl delete -f config/samples/homework_v1alpha1_dummy.yaml && kubectl get pod
+    ```
+
+9. **Cleanup**
+    ```
+    make undeploy && make uninstall
+    ```
+
+Below is the operator-sdk scaffolded documentation in case it is needed.
+
+# a8s-dummy-controller
+Custom controller for the Dummy custom resource. Creates an nginx pod for each deployed Dummy resource and keeps track of its Phase.
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
