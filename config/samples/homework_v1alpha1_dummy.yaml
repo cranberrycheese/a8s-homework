@@ -9,4 +9,4 @@ metadata:
     app.kubernetes.io/created-by: a8s-dummy-controller
   name: dummy-sample
 spec:
-  # TODO(user): Add fields here
+  message: "This is a dummy message!"

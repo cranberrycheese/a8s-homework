@@ -17,6 +17,7 @@ limitations under the License.
 package v1alpha1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -27,15 +28,15 @@ import (
 type DummySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Dummy. Edit dummy_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // DummyStatus defines the observed state of Dummy
 type DummyStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	SpecEcho  string          `json:"specEcho,omitempty"`
+	PodStatus corev1.PodPhase `json:"podStatus,omitempty"`
 }
 
 //+kubebuilder:object:root=true
