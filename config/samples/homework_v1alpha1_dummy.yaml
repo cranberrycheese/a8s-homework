@@ -1,0 +1,12 @@
+apiVersion: homework.interview.com/v1alpha1
+kind: Dummy
+metadata:
+  labels:
+    app.kubernetes.io/name: dummy
+    app.kubernetes.io/instance: dummy-sample
+    app.kubernetes.io/part-of: a8s-dummy-controller
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: a8s-dummy-controller
+  name: dummy-sample
+spec:
+  # TODO(user): Add fields here
